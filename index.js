@@ -3,8 +3,8 @@ const axios = require('axios');
 const PRINCIPAL_RMB = 5000; // 本金 
 
 const ExchangeRate= {
-    RMB_TO_USDT: 6.70,
-    USDT_TO_RMB:6.63
+    ZB_RMB_TO_USDT: 6.70,
+    ZB_USDT_TO_RMB:6.63
 }
 
 // usdt * 6.63 ==>profit
@@ -48,9 +48,28 @@ const _generateZBdata = (data) => {
     return zbTickerArr.slice(0);
 }
 
+const _limit8 = (float) => {
+    float.toFixed(8);
+}
+
 const _analysis = ()  =>{
     var zbObj,bnObj;
+    var result = []
 
+    // usdt 路线
+    var originUSDT = _limit8(PRINCIPAL_RMB/ExchangeRate.RMB_TO_USDT);
+    
+    for(var p in zbObj){
+        // 如果这种货币两个平台都有
+        if(bnObj[p] !== void(0) && zbObj[p].test(/USDT/)){
+            var name = p.replace('USDT','');
+            // var afterVal = originUSDT/zbObj[p].ticker.sell * bnObj[p] *;
+            result.concat([{
+                path:`RMB=>USDT=>${name}=>USDT=>RMB`,
+
+            }])
+        }
+    }
 }
 
 // 获取币安目前正在交易的币种
