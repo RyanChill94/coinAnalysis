@@ -4,7 +4,8 @@ const PRINCIPAL_RMB = 5000; // 本金
 
 const ExchangeRate= {
     ZB_RMB_TO_USDT: 6.70,
-    ZB_USDT_TO_RMB:6.63
+    ZB_USDT_TO_RMB:6.63,
+    REALTIME_USDT_TO_RMB:6.53   // 后续改成实时接口
 }
 
 // usdt * 6.63 ==>profit
@@ -35,8 +36,12 @@ const log = (msg) => {
     console.log(...msg)
 }
 
-const fetchWithTimeout = (timeout, config) => { // race并行执行多个promise，结果由最先结束的Promise决定
-    return Promise.race([axios(config), delay(timeout)])
+// const fetchWithTimeout = (timeout, config) => { // race并行执行多个promise，结果由最先结束的Promise决定
+//     return Promise.race([axios(config), delay(timeout)])
+// }
+
+const fetch = (config) => { // race并行执行多个promise，结果由最先结束的Promise决定
+    return axios(config);
 }
 
 const _generateZBdata = (data) => {
@@ -48,34 +53,56 @@ const _generateZBdata = (data) => {
     return zbTickerArr.slice(0);
 }
 
-const _limit8 = (float) => {
-    float.toFixed(8);
+const _limit = (float,fix) => {
+    return float.toFixed(fix);
 }
 
-const _analysis = ()  =>{
-    var zbObj,bnObj;
-    var result = []
-
+const _analysis = () => {
+    var result = [];
     // usdt 路线
-    var originUSDT = _limit8(PRINCIPAL_RMB/ExchangeRate.RMB_TO_USDT);
+    var originUSDT = _limit(PRINCIPAL_RMB/ExchangeRate.ZB_RMB_TO_USDT,8);
     
     for(var p in zbObj){
-        // 如果这种货币两个平台都有
-        if(bnObj[p] !== void(0) && zbObj[p].test(/USDT/)){
-            var name = p.replace('USDT','');
-            // var afterVal = originUSDT/zbObj[p].ticker.sell * bnObj[p] *;
-            result.concat([{
-                path:`RMB=>USDT=>${name}=>USDT=>RMB`,
+        // BTSUSDT -->BTS
+        if(p.indexOf('USDT') == -1) continue;
 
-            }])
+        var name = p.replace('USDT','');
+
+        for(var bp in bnObj){
+            var reg = new RegExp("^("+ name  +")(\\w*)");
+            var afterVal;
+            var path ='';
+
+            currencyArray = reg.exec(bp);
+            if( currencyArray && bp.indexOf(name) !== -1 ){
+                if(currencyArray[2] === 'USDT'){
+                    afterVal = originUSDT/zbObj[p].ticker.sell * bnObj[bp] * ExchangeRate.REALTIME_USDT_TO_RMB ;
+                    path = `RMB=>USDT=>${name}=>${currencyArray[2]}=>RMB`;
+                }else{
+                    afterVal = originUSDT/zbObj[p].ticker.sell * bnObj[bp] * bnObj[ currencyArray[2] + 'USDT'] * ExchangeRate.REALTIME_USDT_TO_RMB ;
+                    path = `RMB=>USDT=>${name}=>${currencyArray[2]}=>USDT=>RMB`;
+                }
+                var profit =  _limit(afterVal/PRINCIPAL_RMB,4) * 100 +'%';
+                result.push({
+                    path:path,
+                    afterVal:afterVal,
+                    profit:profit
+                })
+            }
         }
     }
+    return result;
 }
 
 // 获取币安目前正在交易的币种
 async function getZBmarket() {
-    log(["开始请求ZB市场币种"]);
-    return fetchWithTimeout(1000, reqAddr.binance_ticker)
+    log(["开始请求ZB市场行情"]);
+    return fetch(reqAddr.zb_market).then(response => response.data);
+}
+
+async function getBNmarket() {
+    log(["开始请求币安市场行情"]);
+    return fetch(reqAddr.binance_ticker)
         .then((res) => {
             var data = res.data;
             if(data && data.length !== 0 ){
@@ -83,7 +110,6 @@ async function getZBmarket() {
                     bnObj[e.symbol] = e.price;
                 });
             }
-
             return true;
         });
 };
@@ -99,18 +125,13 @@ async function getZBAllticker(tickerArray) {
                 market: tickerName
             }
         };
-        return fetchWithTimeout(10000, reqConfig)
+        return fetch(reqConfig)
             .then(responseData => {
                 // responseData.date = date
                 zbObj[name] = responseData.data;
             })
     }
     return await Promise.all(tickerArray.map(proc))
-}
-
-async function getBNmarket() {
-    log(["开始请求币安市场行情"]);
-    return fetchWithTimeout(1000, reqAddr.zb_market).then(response => response.data);
 }
 
 
@@ -122,7 +143,8 @@ async function transferAnalysis() {
         var flag2 = await getBNmarket();
         if (flag1 && flag1) {
             log(['实时数据获取成功，开始分析']);
-            analysis();
+            var ss = _analysis();
+            log([ss])
             // log([zbObj])
         } else {
             log(['数据获取失败，请重试'])
