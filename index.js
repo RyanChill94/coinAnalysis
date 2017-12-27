@@ -5,23 +5,21 @@ const PRINCIPAL_RMB = 5000; // 本金
 const ExchangeRate= {
     ZB_RMB_TO_USDT: 6.70,
     ZB_USDT_TO_RMB:6.63,
-    REALTIME_USDT_TO_RMB:6.53   // 后续改成实时接口
 }
 
-// usdt * 6.63 ==>profit
-// 5000/6.7 ==> usdt
-
+// zb 不允许提币种类
+const ZB_NO_ALLOW = ['USDT','UBTC','XPR','BCD','ZBBTC','SBTC','TV','BCX','BTH','LBTC','ETF','LCH','CHAT'];
 
 let zbObj = {};  // 存放ZB数据
 let bnObj = {};  // 存放币安数据
 let zbTickerArr = []; //币安参数请求列表
-
+let REALTIME_USDT_TO_RMB = 6.53 
 
 const reqAddr = {
+    currency:'https://api.fixer.io/latest?base=USD',
     zb_market: 'http://api.zb.com/data/v1/markets', // zb市场信息 
     zb_ticker: 'http://api.zb.com/data/v1/ticker', // zb获取单个行情的具体信息
     binance_ticker: 'https://api.binance.com/api/v1/ticker/allPrices' //获取币安市场行情
-
 }
 
 const delay = (ms) => {
@@ -74,24 +72,44 @@ const _analysis = () => {
             var path ='';
 
             currencyArray = reg.exec(bp);
-            if( currencyArray && bp.indexOf(name) !== -1 ){
-                if(currencyArray[2] === 'USDT'){
-                    afterVal = originUSDT/zbObj[p].ticker.sell * bnObj[bp] * ExchangeRate.REALTIME_USDT_TO_RMB ;
-                    path = `RMB=>USDT=>${name}=>${currencyArray[2]}=>RMB`;
+            if(!currencyArray) continue;
+
+            var bridge = currencyArray[1]; // 中间货币
+            var settle = currencyArray[2]; // 结算金额
+            if(bp.indexOf(name) !== -1 && settle && ZB_NO_ALLOW.indexOf(bridge) == -1){
+                if(settle === 'USDT'){
+                    afterVal = originUSDT/zbObj[p].ticker.sell * bnObj[bp] * REALTIME_USDT_TO_RMB ;
+                    path = `RMB=>USDT=>${name}=>${settle}=>RMB`;
                 }else{
-                    afterVal = originUSDT/zbObj[p].ticker.sell * bnObj[bp] * bnObj[ currencyArray[2] + 'USDT'] * ExchangeRate.REALTIME_USDT_TO_RMB ;
-                    path = `RMB=>USDT=>${name}=>${currencyArray[2]}=>USDT=>RMB`;
+                    afterVal = originUSDT/zbObj[p].ticker.sell * bnObj[bp] * bnObj[ settle + 'USDT'] * REALTIME_USDT_TO_RMB ;
+                    path = `RMB=>USDT=>${name}=>${settle}=>USDT=>RMB`;
                 }
                 var profit =  _limit(afterVal/PRINCIPAL_RMB,4) * 100 +'%';
                 result.push({
                     path:path,
-                    afterVal:afterVal,
+                    afterVal:_limit(afterVal,4),
                     profit:profit
                 })
             }
         }
     }
+    result.sort((a,b)=>{
+        return b.afterVal - a.afterVal 
+    })
+
     return result;
+}
+
+async function getCurrencyRate(){
+    log(["开始请求美元实时汇率"]);
+    return fetch(reqAddr.currency)
+        .then( (res) => {
+            if( res.data){
+                REALTIME_USDT_TO_RMB = res.data.rates.CNY;
+                return true
+            }
+            return false
+        });
 }
 
 // 获取币安目前正在交易的币种
@@ -137,15 +155,16 @@ async function getZBAllticker(tickerArray) {
 
 async function transferAnalysis() {
     try {
+        var currenctFlag = await getCurrencyRate();
+        currenctFlag ? log(['实时汇率获取成功']):log(['实时汇率获取失败']);
         var data = await getZBmarket();
         var zbTickerArr = _generateZBdata(data);
         var flag1 = await getZBAllticker(zbTickerArr);
         var flag2 = await getBNmarket();
         if (flag1 && flag1) {
             log(['实时数据获取成功，开始分析']);
-            var ss = _analysis();
-            log([ss])
-            // log([zbObj])
+            var result = _analysis();
+            log([result]);
         } else {
             log(['数据获取失败，请重试'])
         }
