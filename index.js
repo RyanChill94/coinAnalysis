@@ -174,15 +174,5 @@ async function transferAnalysis() {
 
 }
 
-// function test(){
-//     var data  =  axios({ url: reqAddr.zb_ticker , methods:'get' , params:{market:'ubtc_usdt'}}).then(res => res.data);
-//     console.log(data);
-// }
 
 transferAnalysis();
-
-
-// test()
-
-
-//module.exports = RequestUtils
