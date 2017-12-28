@@ -8,7 +8,7 @@ const ExchangeRate= {
 }
 
 // zb 不允许提币种类
-const ZB_NO_ALLOW = ['USDT','UBTC','XPR','BCD','ZBBTC','SBTC','TV','BCX','BTH','LBTC','ETF','LCH','CHAT'];
+const ZB_NO_ALLOW = ['USDT','UBTC','XRP','BCD','ZBBTC','SBTC','TV','BCX','BTH','LBTC','ETF','LCH','CHAT'];
 
 let zbObj = {};  // 存放ZB数据
 let bnObj = {};  // 存放币安数据
@@ -84,11 +84,11 @@ const _analysis = () => {
                     afterVal = originUSDT/zbObj[p].ticker.sell * bnObj[bp] * bnObj[ settle + 'USDT'] * REALTIME_USDT_TO_RMB ;
                     path = `RMB=>USDT=>${name}=>${settle}=>USDT=>RMB`;
                 }
-                var profit =  _limit(afterVal/PRINCIPAL_RMB,4) * 100 +'%';
+                var discount =  '-' + _limit((100 - afterVal/PRINCIPAL_RMB * 100),4)  +'%';
                 result.push({
                     path:path,
                     afterVal:_limit(afterVal,4),
-                    profit:profit
+                    discount:discount
                 })
             }
         }
